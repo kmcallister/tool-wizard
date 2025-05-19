@@ -27,12 +27,13 @@ class Command(object):
             if match is None:
                 # Found something we can't parse, time to bail
                 return
-
             if cmd is None:
+                # Save the command. We still parse it as an arg as well
+                # (used in particular for T commands)
                 cmd = word
             arg_letter = match.group(1)
             arg_number = match.group(2)
-            args[arg_letter] = int(match.group(2)) if arg_letter == 'T' else float(match.group(2))
+            args[arg_letter] = int(arg_number) if arg_letter == 'T' else float(arg_number)
 
         self.cmd = cmd
         self.args = args
@@ -73,9 +74,9 @@ def propagate(callback, reverse=False):
         callback(command, prev_facts)
         prev_facts = command.facts
 
-# Propagate position, feed rate, etc.
+# Propagate XY position and feed rate.
 def prop_gcode_state(command, prev_facts):
-    for var in 'XYZEF':
+    for var in 'XYF':
         command.facts[var] = command.args[var] if var in command.args else prev_facts.get(var)
 
 # Propagate a rough time estimate of when each command will execute.
