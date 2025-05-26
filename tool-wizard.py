@@ -149,6 +149,20 @@ def prop_preheat(command, prev_facts):
             command.facts['heating'].remove(tool)
             command.magic_post.append('M104 T{} S0'.format(tool))
 
+# Propagate fan speed, and transfer speed to the active tool.
+def prop_fan(command, prev_facts):
+    fan_speed = prev_facts.get('fan_speed', 0)
+    if command.cmd is not None:
+        if command.cmd == 'M106':
+            fan_speed = command.args['S']
+        elif command.cmd == 'M107':
+            fan_speed = 0
+        elif command.cmd.startswith('T'):
+            command.magic_pre.append('M106 S0')
+            command.magic_post.append('M106 S{}'.format(fan_speed))
+
+    command.facts['fan_speed'] = fan_speed
+
 filename = sys.argv[1]
 
 commands = parse_file(filename)
@@ -158,6 +172,7 @@ propagate(prop_time_estimate)
 propagate(prop_active_tool)
 propagate(prop_next_needed, reverse=True)
 propagate(prop_preheat)
+propagate(prop_fan)
 
 write_file(filename)
 #for command in commands:
