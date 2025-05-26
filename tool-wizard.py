@@ -4,7 +4,7 @@ import re
 from math import sqrt
 
 idle_temp = 150.0
-preheat_time = 7.0
+preheat_time = 9.0
 
 trim_comments = re.compile(r';.*$')
 command_word = re.compile(r'([A-Z])([0-9.+-]*)$')
