@@ -11,14 +11,15 @@ command_word = re.compile(r'([A-Z])([0-9.+-]*)$')
 
 # Represents a raw or parsed G-code command, along with associated "facts"
 # (computed data about the print state) and "magic" (extra G-code commands
-# inserted after this one).
+# inserted before or after this one).
 class Command(object):
     def __init__(self, raw):
         self.raw = raw.rstrip()
         self.cmd = None
         self.args = {}
         self.facts = {}
-        self.magic = []
+        self.magic_pre = []
+        self.magic_post = []
 
         cmd = None
         args = {}
@@ -39,15 +40,19 @@ class Command(object):
         self.args = args
 
     def output(self, out):
+        for ln in self.magic_pre:
+            out.write(ln + ' ; inserted by tool-wizard\n')
         out.write(self.raw + '\n')
-        for ln in self.magic:
+        for ln in self.magic_post:
             out.write(ln + ' ; inserted by tool-wizard\n')
 
     def debug_dump(self, out):
+        if len(self.magic_pre) > 0:
+            out.write('; magic_pre: {!r}\n'.format(self.magic_pre))
         out.write(self.raw + '\n')
         out.write('; facts: {!r}\n'.format(self.facts))
-        if len(self.magic) > 0:
-            out.write('; magic: {!r}\n'.format(self.magic))
+        if len(self.magic_post) > 0:
+            out.write('; magic_post: {!r}\n'.format(self.magic_post))
         out.write('\n')
 
 def parse_file(filename):
@@ -131,18 +136,18 @@ def prop_preheat(command, prev_facts):
 
         if tool not in command.facts['heating'] and time_till_needed <= preheat_time:
             command.facts['heating'].add(tool)
-            command.magic.append('M104 T{} S{}'.format(tool, command.facts['next_temp'][tool]))
+            command.magic_post.append('M104 T{} S{}'.format(tool, command.facts['next_temp'][tool]))
 
         elif tool in command.facts['heating'] and time_till_needed > preheat_time:
             command.facts['heating'].remove(tool)
-            command.magic.append('M104 T{} S{}'.format(tool, idle_temp))
+            command.magic_post.append('M104 T{} S{}'.format(tool, idle_temp))
 
     # Turn off tools that won't be used for the remainder of the print.
     turn_off = list(tool for tool in command.facts['heating'] if tool not in command.facts['time_next_needed'])
     for tool in turn_off:
         if tool != active_tool:
             command.facts['heating'].remove(tool)
-            command.magic.append('M104 T{} S0'.format(tool))
+            command.magic_post.append('M104 T{} S0'.format(tool))
 
 filename = sys.argv[1]
 
