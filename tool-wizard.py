@@ -79,10 +79,15 @@ def propagate(callback, reverse=False):
         callback(command, prev_facts)
         prev_facts = command.facts
 
+movement_commands = set('G0 G1 G2 G3'.split())
+
 # Propagate XY position and feed rate.
 def prop_gcode_state(command, prev_facts):
     for var in 'XYF':
-        command.facts[var] = command.args[var] if var in command.args else prev_facts.get(var)
+        if command.cmd in movement_commands and var in command.args:
+            command.facts[var] = command.args[var]
+        else:
+            command.facts[var] = prev_facts.get(var)
 
 # Propagate a rough time estimate of when each command will execute.
 def prop_time_estimate(command, prev_facts):
