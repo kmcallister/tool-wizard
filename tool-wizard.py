@@ -3,7 +3,7 @@ import sys
 import re
 from math import sqrt
 
-idle_temp = 150.0
+idle_temp_delta = 65.0
 preheat_time = 9.0
 
 trim_comments = re.compile(r';.*$')
@@ -138,14 +138,15 @@ def prop_preheat(command, prev_facts):
             continue
 
         time_till_needed = time_needed - command.facts['time']
+        next_temp = command.facts['next_temp'][tool]
 
         if tool not in command.facts['heating'] and time_till_needed <= preheat_time:
             command.facts['heating'].add(tool)
-            command.magic_post.append('M104 T{} S{}'.format(tool, command.facts['next_temp'][tool]))
+            command.magic_post.append('M104 T{} S{}'.format(tool, next_temp))
 
         elif tool in command.facts['heating'] and time_till_needed > preheat_time:
             command.facts['heating'].remove(tool)
-            command.magic_post.append('M104 T{} S{}'.format(tool, idle_temp))
+            command.magic_post.append('M104 T{} S{}'.format(tool, next_temp - idle_temp_delta))
 
     # Turn off tools that won't be used for the remainder of the print.
     turn_off = list(tool for tool in command.facts['heating'] if tool not in command.facts['time_next_needed'])
