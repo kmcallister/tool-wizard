@@ -116,7 +116,8 @@ def prop_next_needed(command, next_facts):
         if command.cmd.startswith('T'):
             command.facts['time_next_needed'][command.args['T']] = command.facts['time']
         elif command.cmd in ('M104', 'M109'):
-            command.facts['next_temp'][command.args['T']] = command.args['S']
+            tool = command.args.get('T', command.facts['active_tool'])
+            command.facts['next_temp'][tool] = command.args['S']
 
 # Propagate preheat state and emit preheat / heater idle commands.
 def prop_preheat(command, prev_facts):
