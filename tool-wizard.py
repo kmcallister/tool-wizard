@@ -126,11 +126,11 @@ def prop_preheat(command, prev_facts):
         # Can't do anything if we don't know the active tool yet.
         return
 
-    if 'heating' in prev_facts:
-        command.facts['heating'] = set(prev_facts['heating'])
+    if 'heat_state' in prev_facts:
+        command.facts['heat_state'] = dict(prev_facts['heat_state'])
     else:
         # Assume only the active tool is heating at the start.
-        command.facts['heating'] = set([active_tool])
+        command.facts['heat_state'] = {active_tool: 'active'}
 
     # For every tool that is needed in the future, decide if we should start heating or idling it.
     for tool, time_needed in command.facts['time_next_needed'].items():
@@ -141,19 +141,21 @@ def prop_preheat(command, prev_facts):
         time_till_needed = time_needed - command.facts['time']
         next_temp = command.facts['next_temp'][tool]
 
-        if tool not in command.facts['heating'] and time_till_needed <= preheat_time:
-            command.facts['heating'].add(tool)
+        heat_state = command.facts['heat_state'].get(tool)
+
+        if heat_state != 'active' and time_till_needed <= preheat_time:
+            command.facts['heat_state'][tool] = 'active'
             command.magic_post.append('M104 T{} S{}'.format(tool, next_temp))
 
-        elif tool in command.facts['heating'] and time_till_needed > preheat_time:
-            command.facts['heating'].remove(tool)
+        elif heat_state == 'active'  and time_till_needed > preheat_time:
+            command.facts['heat_state'][tool] = 'idle'
             command.magic_post.append('M104 T{} S{}'.format(tool, next_temp - idle_temp_delta))
 
     # Turn off tools that won't be used for the remainder of the print.
-    turn_off = list(tool for tool in command.facts['heating'] if tool not in command.facts['time_next_needed'])
+    turn_off = list(tool for tool in command.facts['heat_state'].keys() if tool not in command.facts['time_next_needed'])
     for tool in turn_off:
         if tool != active_tool:
-            command.facts['heating'].remove(tool)
+            del command.facts['heat_state'][tool]
             command.magic_post.append('M104 T{} S0'.format(tool))
 
 # Propagate fan speed, and transfer speed to the active tool.
