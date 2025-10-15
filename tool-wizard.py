@@ -3,8 +3,9 @@ import sys
 import re
 from math import sqrt
 
-idle_temp_delta = 65.0
-preheat_time = 9.0
+idle_temp_delta =  65.0  # Lower temperature by this much when idle
+preheat_time    =   9.0  # Lower temperature of tools that won't be used for this many seconds
+off_time        =  60.0  # Turn off tools that won't be used for this many seconds
 
 trim_comments = re.compile(r';.*$')
 command_word = re.compile(r'([A-Z])([0-9.+-]*)$')
@@ -132,31 +133,30 @@ def prop_preheat(command, prev_facts):
         # Assume only the active tool is heating at the start.
         command.facts['heat_state'] = {active_tool: 'active'}
 
-    # For every tool that is needed in the future, decide if we should start heating or idling it.
-    for tool, time_needed in command.facts['time_next_needed'].items():
+    # Consider every tool that has a heat state or will be used in the future.
+    for tool in set(command.facts['time_next_needed'].keys()).union(command.facts['heat_state'].keys()):
         if tool == active_tool:
             # Don't mess with the active tool.
             continue
 
-        time_till_needed = time_needed - command.facts['time']
-        next_temp = command.facts['next_temp'][tool]
+        if tool in command.facts['time_next_needed']:
+            time_till_needed = command.facts['time_next_needed'][tool] - command.facts['time']
+            next_temp = command.facts['next_temp'][tool]
 
-        heat_state = command.facts['heat_state'].get(tool)
+            new_state = 'off' if time_till_needed > off_time \
+                else 'idle' if time_till_needed > preheat_time \
+                else 'active'
+        else:
+            # Tool isn't needed anymore; turn it off for the rest of the print.
+            new_state = 'off'
 
-        if heat_state != 'active' and time_till_needed <= preheat_time:
-            command.facts['heat_state'][tool] = 'active'
-            command.magic_post.append('M104 T{} S{}'.format(tool, next_temp))
+        if command.facts['heat_state'].get(tool) != new_state:
+            command.facts['heat_state'][tool] = new_state
+            new_temp = 0 if new_state == 'off' \
+                else next_temp - idle_temp_delta if new_state == 'idle' \
+                else next_temp
 
-        elif heat_state == 'active'  and time_till_needed > preheat_time:
-            command.facts['heat_state'][tool] = 'idle'
-            command.magic_post.append('M104 T{} S{}'.format(tool, next_temp - idle_temp_delta))
-
-    # Turn off tools that won't be used for the remainder of the print.
-    turn_off = list(tool for tool in command.facts['heat_state'].keys() if tool not in command.facts['time_next_needed'])
-    for tool in turn_off:
-        if tool != active_tool:
-            del command.facts['heat_state'][tool]
-            command.magic_post.append('M104 T{} S0'.format(tool))
+            command.magic_post.append('M104 T{} S{}'.format(tool, new_temp))
 
 # Propagate fan speed, and transfer speed to the active tool.
 def prop_fan(command, prev_facts):
